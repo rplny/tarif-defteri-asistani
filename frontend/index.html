@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Tarif Defteri Asistanı</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Fraunces:wght@600;700&family=Nunito:wght@400;600;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/static/styles.css" />
+</head>
+<body>
+  <div class="page">
+    <header class="hero">
+      <p class="brand">Tarif Defteri Asistanı</p>
+      <h1>Defterindeki tarifleri bul</h1>
+      <p class="lead">Doğal dilde sor, diyet filtrele veya elindeki malzemelerle eşleştir.</p>
+    </header>
+
+    <nav class="tabs" role="tablist">
+      <button class="tab active" data-tab="search" type="button">Soru Sor</button>
+      <button class="tab" data-tab="match" type="button">Malzemelerim</button>
+      <button class="tab" data-tab="gallery" type="button">Galeri</button>
+    </nav>
+
+    <section id="panel-search" class="panel active">
+      <form id="search-form" class="row">
+        <input id="q" type="text" maxlength="300" placeholder="sebzesiz tarif öner" required />
+        <button type="submit">Ara</button>
+      </form>
+      <pre id="answer" class="answer" hidden></pre>
+      <div id="search-results" class="grid"></div>
+    </section>
+
+    <section id="panel-match" class="panel">
+      <form id="match-form" class="row">
+        <input id="bag" type="text" maxlength="500" placeholder="yumurta, un, süt" required />
+        <button type="submit">Eşleştir</button>
+      </form>
+      <div id="match-results" class="grid"></div>
+    </section>
+
+    <section id="panel-gallery" class="panel">
+      <div id="gallery" class="grid"></div>
+    </section>
+
+    <p id="status" class="status"></p>
+  </div>
+  <script src="/static/app.js"></script>
+</body>
+</html>
