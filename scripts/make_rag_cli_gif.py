@@ -50,7 +50,7 @@ def frames():
             [
                 (MUTED, "> python main.py --demo"),
                 (GREEN, "Embedding modeli indiriliyor: 100.0%"),
-                (GREEN, "21 parça indekslendi (10 kaynak dosya)."),
+                (GREEN, "38 parça indekslendi (16 kaynak dosya)."),
                 (GREEN, "Sohbet modeli indiriliyor: 100.0%"),
                 (WHITE, "Modeller yüklendi. Sorularınızı bekliyorum."),
                 (MUTED, 'Çıkmak için "quit" yazın.'),

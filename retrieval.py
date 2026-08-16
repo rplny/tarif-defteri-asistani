@@ -2,7 +2,7 @@
 import math
 from pathlib import Path
 
-from text_utils import STOP, normalize, stem
+from text_utils import STOP, has_term, normalize, stem
 
 
 def cosine_similarity(a, b):
@@ -60,11 +60,20 @@ QUERY_STOP = STOP | {
 }
 
 
+def token_in_text(text, token):
+    blob = normalize(text)
+    if has_term(blob, token):
+        return True
+    return any(stem(word) == token for word in blob.split() if word)
+
+
 def keyword_rank_chunks(query, docs, sources=None, top_k=3):
     """Kosinüs yetmezse parça metninde kelime örtüşmesiyle arar."""
     sources = sources or [""] * len(docs)
+    qnorm = normalize(query)
+    want_meat = "etli" in qnorm and "etsiz" not in qnorm
     tokens = []
-    for word in normalize(query).split():
+    for word in qnorm.split():
         if len(word) < 4 or word in QUERY_STOP:
             continue
         tokens.append(word)
@@ -79,18 +88,24 @@ def keyword_rank_chunks(query, docs, sources=None, top_k=3):
         source_name = normalize(sources[index] if index < len(sources) else "")
         source_stem = normalize(Path(sources[index] or "").stem)
         hits = 0
+        meatless = "et yoktur" in blob or "et icermez" in blob
         for token in tokens:
             if token == "vegan" and "vegan degildir" in blob:
                 continue
-            if token in blob:
+            if want_meat and meatless:
+                continue
+            if token_in_text(blob, token):
                 hits += 1
         if source_stem and len(source_stem) >= 4:
             if any(
-                token == source_stem or token.startswith(source_stem) or source_stem.startswith(token)
+                token == source_stem
+                or token.startswith(source_stem)
+                or source_stem.startswith(token)
+                or token in source_name
                 for token in tokens
             ):
                 hits += 2
-        elif any(token in source_name for token in tokens):
+        elif any(token_in_text(source_name, token) or token in source_name for token in tokens):
             hits += 2
         if hits:
             scored.append((hits, index))
@@ -106,6 +121,26 @@ def keyword_rank_chunks(query, docs, sources=None, top_k=3):
             }
         )
     return out
+
+
+def part_in_query(query, part):
+    q = normalize(query)
+    if has_term(q, part):
+        return True
+    return any(tok == part or stem(tok) == part for tok in q.split())
+
+
+def tighten_hits(query, hits):
+    """Dosya adı sorudaki yemeğe uyuyorsa diğer parçaları bırakır."""
+    if not hits:
+        return hits
+    named = []
+    for hit in hits:
+        name = normalize(Path(hit.get("source") or "").stem)
+        parts = [part for part in name.split("_") if len(part) >= 4]
+        if parts and all(part_in_query(query, part) for part in parts):
+            named.append(hit)
+    return named or hits
 
 
 def format_context(hits):

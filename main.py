@@ -6,7 +6,7 @@ from foundry_local_sdk import Configuration, FoundryLocalManager
 
 from ingestion import load_chunk_records
 from knowledge_store import KB_FOLDER, get_connection, index_documents, load_records
-from retrieval import format_context, keyword_rank_chunks, rank_chunks
+from retrieval import format_context, keyword_rank_chunks, rank_chunks, tighten_hits
 from text_utils import STOP, normalize
 
 SYSTEM_PROMPT = (
@@ -22,8 +22,63 @@ def load_knowledge_items():
     return load_chunk_records(KB_FOLDER)
 
 
+CATALOGS = (
+    ("sebzesiz", "sebzesiz tarifler:"),
+    ("vegan", "vegan tarifler:"),
+    ("etsiz", "vejetaryen tarifler:"),
+    ("vejetaryen", "vejetaryen tarifler:"),
+    ("tatli", "tatlilar:"),
+    ("kahvalti", "kahvalti tarifler:"),
+    ("meze", "meze tarifler:"),
+    ("corba", "corba tarifler:"),
+    ("etli", "etli tarifler:"),
+)
+
+
+def is_list_query(query):
+    q = normalize(query)
+    return any(key in q for key in ("oner", "vegan", "sebzesiz", "vejetaryen", "tatli"))
+
+
+def catalog_marker(query):
+    if not is_list_query(query):
+        return None
+    q = normalize(query)
+    for key, marker in CATALOGS:
+        if key in q:
+            return marker
+    return None
+
+
+def catalog_hits(query, docs, sources=None):
+    marker = catalog_marker(query)
+    if not marker or not docs:
+        return []
+    sources = sources or [""] * len(docs)
+    found = []
+    for index, doc in enumerate(docs):
+        blob = normalize(doc)
+        if marker not in blob:
+            continue
+        if marker == "vegan tarifler:" and "vegan degildir" in blob:
+            continue
+        found.append(
+            {
+                "index": index,
+                "score": 1.0,
+                "content": doc,
+                "source": sources[index] if index < len(sources) else "",
+            }
+        )
+    found.sort(key=lambda hit: 0 if hit.get("source") == "diyet.txt" else 1)
+    return found
+
+
 def get_top_chunks(query, embedding_client, docs, doc_embeddings, sources=None, top_k=3, min_score=0.45):
     """Soruyu göm, SQLite vektörleriyle kosinüs hesapla, en alakalı 2–3 parçayı döndür."""
+    listed = catalog_hits(query, docs, sources=sources)
+    if listed:
+        return listed
     query_response = embedding_client.generate_embedding(query)
     query_embedding = query_response.data[0].embedding
     hits = rank_chunks(
@@ -35,8 +90,8 @@ def get_top_chunks(query, embedding_client, docs, doc_embeddings, sources=None, 
         min_score=min_score,
     )
     if hits:
-        return hits
-    return keyword_rank_chunks(query, docs, sources=sources, top_k=top_k)
+        return tighten_hits(query, hits)
+    return tighten_hits(query, keyword_rank_chunks(query, docs, sources=sources, top_k=top_k))
 
 
 def retrieve_context(query, embedding_client, docs, doc_embeddings, sources=None, top_k=3, min_score=0.45):
@@ -59,35 +114,29 @@ GENERIC = STOP | {
 }
 
 
-def is_list_query(query):
-    q = normalize(query)
-    return any(key in q for key in ("oner", "vegan", "sebzesiz", "vejetaryen"))
-
-
 def select_hits(query, hits):
-    q = normalize(query)
     if not hits:
+        return hits
+    marker = catalog_marker(query)
+    if not marker:
         return hits
 
     def blob(hit):
         return normalize(hit.get("content") or "")
 
-    if "sebzesiz" in q:
-        matched = [hit for hit in hits if "sebzesiz" in blob(hit)]
-    elif "vegan" in q:
-        matched = [
-            hit
-            for hit in hits
-            if "vegan" in blob(hit) and "vegan degildir" not in blob(hit)
-        ]
-    elif "vejetaryen" in q:
-        matched = [hit for hit in hits if "vejetaryen" in blob(hit)]
-    else:
+    listed = [hit for hit in hits if marker in blob(hit)]
+    if marker == "vegan tarifler:":
+        listed = [hit for hit in listed if "vegan degildir" not in blob(hit)]
+        if not listed:
+            listed = [
+                hit
+                for hit in hits
+                if "vegan" in blob(hit) and "vegan degildir" not in blob(hit)
+            ]
+    if not listed:
         return hits
-    if not matched:
-        return hits
-    matched.sort(key=lambda hit: 0 if hit.get("source") == "diyet.txt" else 1)
-    return matched
+    listed.sort(key=lambda hit: 0 if hit.get("source") == "diyet.txt" else 1)
+    return listed
 
 
 def is_grounded(answer, hits):
@@ -106,10 +155,32 @@ def is_grounded(answer, hits):
     return any(len(word) >= 5 for word in overlap)
 
 
+def list_sentence(text):
+    text = (text or "").strip()
+    parts = []
+    buf = []
+    for ch in text:
+        buf.append(ch)
+        if ch in ".!?":
+            parts.append("".join(buf).strip())
+            buf = []
+    if buf:
+        parts.append("".join(buf).strip())
+    for part in parts:
+        if "tarifler:" in part.lower() or "tatlilar:" in normalize(part):
+            sentence = part.strip().rstrip(".!?")
+            if sentence.lower().startswith("bu defterde "):
+                sentence = sentence[12:]
+            return sentence
+    if parts:
+        return parts[0].strip().rstrip(".!?")
+    return text
+
+
 def quote_hits(hits):
     hit = hits[0]
     source = hit.get("source") or "kaynak"
-    text = (hit.get("content") or "").strip()
+    text = list_sentence(hit.get("content") or "")
     return f"{source} dosyasına göre {text}"
 
 

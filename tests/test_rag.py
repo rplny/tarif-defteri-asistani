@@ -255,3 +255,142 @@ def test_list_query_uses_chunk_not_short_model_line():
     assert "omlet" in answer.lower()
     assert "baklava" in answer.lower()
     assert "sebize" not in answer.lower()
+    assert "salatalık" not in answer.lower()
+    assert answer.startswith("diyet.txt dosyasına göre")
+
+
+def test_tatli_oner_uses_first_sentence():
+    from main import finalize_answer
+
+    hits = [
+        {
+            "source": "baklava.txt",
+            "content": "Cevizli baklava şerbetli tatlıdır. Malzemeler: yufka, ceviz, tereyağ, şeker, su ve limon. Sebze yoktur. Vejetaryendir, vegan değildir.",
+        }
+    ]
+    answer = finalize_answer("", hits, "tatlı öner")
+    assert "baklava" in answer.lower()
+    assert "malzemeler" not in answer.lower()
+    assert "vegan" not in answer.lower()
+    assert answer.startswith("baklava.txt dosyasına göre")
+
+
+def test_tatli_oner_lists_notebook_desserts():
+    from main import answer_query, load_knowledge_items
+    from text_utils import normalize
+
+    client = LocalEmbeddingClient()
+    items = load_knowledge_items()
+    docs = [item["content"] for item in items]
+    sources = [item["source"] for item in items]
+    embs = [item.embedding for item in client.generate_embeddings(docs).data]
+    answer = normalize(answer_query("tatlı öner", client, embs, docs=docs, sources=sources))
+    assert "baklava" in answer
+    assert "sutlac" in answer
+    assert "brownie" in answer
+    assert "malzemeler" not in answer
+
+
+def test_category_lists_use_diyet_catalog():
+    from main import answer_query, load_knowledge_items
+    from text_utils import normalize
+
+    client = LocalEmbeddingClient()
+    items = load_knowledge_items()
+    docs = [item["content"] for item in items]
+    sources = [item["source"] for item in items]
+    embs = [item.embedding for item in client.generate_embeddings(docs).data]
+
+    vegetarian = normalize(answer_query("vejetaryen tarif öner", client, embs, docs=docs, sources=sources))
+    assert "menemen" in vegetarian
+    assert "cacik" in vegetarian
+    assert "malzemeler" not in vegetarian
+    assert vegetarian.startswith("diyet.txt")
+
+    breakfast = normalize(answer_query("kahvaltı öner", client, embs, docs=docs, sources=sources))
+    assert "menemen" in breakfast
+    assert "omlet" in breakfast
+    assert breakfast.startswith("diyet.txt")
+
+    mezze = normalize(answer_query("meze öner", client, embs, docs=docs, sources=sources))
+    assert "cacik" in mezze
+    assert "kisir" in mezze
+    assert "koftesi" in mezze
+    assert mezze.startswith("diyet.txt")
+
+    soup = normalize(answer_query("çorba öner", client, embs, docs=docs, sources=sources))
+    assert "mercimek" in soup
+    assert "iskembe" in soup
+    assert "omlet" not in soup
+    assert soup.startswith("diyet.txt")
+
+    meat = normalize(answer_query("etli tarif öner", client, embs, docs=docs, sources=sources))
+    assert "kofte" in meat
+    assert "tavuk" in meat
+    assert "baklava" not in meat
+    assert meat.startswith("diyet.txt")
+
+    meatless = normalize(answer_query("etsiz tarif öner", client, embs, docs=docs, sources=sources))
+    assert "menemen" in meatless
+    assert "cacik" in meatless
+    assert meatless.startswith("diyet.txt")
+
+    no_veg = normalize(answer_query("sebzesiz tarif öner", client, embs, docs=docs, sources=sources))
+    assert "omlet" in no_veg
+    assert "sutlac" in no_veg
+    assert "brownie" in no_veg
+    assert no_veg.startswith("diyet.txt")
+
+
+def test_howto_uses_recipe_file_not_lookalike():
+    from main import load_knowledge_items
+
+    client = LocalEmbeddingClient()
+    items = load_knowledge_items()
+    docs = [item["content"] for item in items]
+    sources = [item["source"] for item in items]
+    embs = [item.embedding for item in client.generate_embeddings(docs).data]
+    tavuk = get_top_chunks("Tavuk sote nasıl yapılır?", client, docs, embs, sources=sources)
+    assert tavuk
+    assert tavuk[0]["source"] == "tavuk_sote.txt"
+    kofte = get_top_chunks("Köfte nasıl yapılır?", client, docs, embs, sources=sources)
+    assert kofte
+    assert kofte[0]["source"] == "kofte.txt"
+    iskembe = get_top_chunks("İşkembe çorbası nasıl yapılır?", client, docs, embs, sources=sources)
+    assert iskembe
+    assert iskembe[0]["source"] == "iskembe_corbasi.txt"
+    assert all(hit["source"] == "iskembe_corbasi.txt" for hit in iskembe)
+    mercimek_kofte = get_top_chunks("Mercimek köftesi nasıl yapılır?", client, docs, embs, sources=sources)
+    assert mercimek_kofte
+    assert mercimek_kofte[0]["source"] == "mercimek_koftesi.txt"
+    assert all(hit["source"] == "mercimek_koftesi.txt" for hit in mercimek_kofte)
+
+
+def test_keyword_does_not_match_sotele_to_sote():
+    from retrieval import keyword_rank_chunks
+
+    docs = [
+        "Soğan ve biberi zeytinyağında sotele. Yumurtaları kır.",
+        "Tavuk sote tavuk göğsüyle yapılan etli bir yemektir.",
+    ]
+    sources = ["menemen.txt", "tavuk_sote.txt"]
+    hits = keyword_rank_chunks("Tavuk sote nasıl yapılır?", docs, sources)
+    assert hits
+    assert hits[0]["source"] == "tavuk_sote.txt"
+    assert all(hit["source"] != "menemen.txt" for hit in hits)
+
+
+def test_select_hits_vejetaryen_prefers_catalog():
+    from main import select_hits
+
+    hits = [
+        {"source": "baklava.txt", "content": "Cevizli baklava. Vejetaryendir, vegan değildir."},
+        {
+            "source": "diyet.txt",
+            "content": "Bu defterde vejetaryen tarifler: menemen, cacık ve peynirli omlet.",
+        },
+    ]
+    picked = select_hits("vejetaryen tarif öner", hits)
+    assert picked
+    assert picked[0]["source"] == "diyet.txt"
+    assert "menemen" in picked[0]["content"]

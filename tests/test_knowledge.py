@@ -31,8 +31,15 @@ def test_index_from_txt_folder():
     assert "menemen.txt" in sources
     assert "cacik.txt" in sources
     assert "diyet.txt" in sources
+    assert "sutlac.txt" in sources
+    assert "brownie.txt" in sources
+    assert "kofte.txt" in sources
+    assert "tavuk_sote.txt" in sources
+    assert "iskembe_corbasi.txt" in sources
+    assert "mercimek_koftesi.txt" in sources
     assert any("vegan" in text.lower() for text in texts)
     assert any("sebzesiz" in text.lower() for text in texts)
+    assert any("tatlılar" in text for text in texts)
 
 
 def test_index_documents_with_local_embed(tmp_path):

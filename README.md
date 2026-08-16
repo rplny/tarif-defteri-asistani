@@ -8,7 +8,7 @@ Yemek tarifleri üzerine yerel belge asistanı. Soru sorulunca önce defterdeki 
 
 Genel bir dil modeli, senin defterinde olmayan bir tarifi uydurabilir. Bu asistan RAG kullanır: önce ara, sonra üret. Tarif belgede yoksa “Bu bilgi context'te yok.” der. Varsa kaynak dosyayı belirtir (`menemen.txt` gibi).
 
-Bilgi tabanı: `knowledge/` altında 9 tarif ve `diyet.txt` (vegan / sebzesiz / vejetaryen listesi).
+Bilgi tabanı: `knowledge/` altında tarifler ve `diyet.txt` (vegan / sebzesiz / vejetaryen / tatlı / kahvaltı / meze / çorba / etli listeleri).
 
 ## Nasıl çalışır
 
@@ -69,7 +69,7 @@ Yeni tarif için `knowledge/` altına `.txt` koy, `python main.py` veya `ingesti
 2. Vegan: `vegan tarif öner`  
    Beklenen: kısır, imam bayıldı, sebze güveç + `diyet.txt`
 3. Sebzesiz: `sebzesiz tarif öner`  
-   Beklenen: omlet, pilav, baklava + `diyet.txt`
+   Beklenen: omlet, pilav, baklava, sütlaç, brownie + `diyet.txt`
 4. Cevaplanamaz: `Bu uygulamanın aylık barındırma maliyeti nedir?`  
    Beklenen: `Bu bilgi context'te yok.`
 5. Boş soru: Enter  

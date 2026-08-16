@@ -35,9 +35,17 @@ def normalize(text):
     if text is None:
         return ""
     return (
-        str(text).lower()
-        .replace("ı", "i").replace("İ", "i").replace("ğ", "g")
-        .replace("ü", "u").replace("ş", "s").replace("ö", "o").replace("ç", "c")
+        str(text)
+        .replace("İ", "i")
+        .replace("I", "i")
+        .lower()
+        .replace("ı", "i")
+        .replace("ğ", "g")
+        .replace("ü", "u")
+        .replace("ş", "s")
+        .replace("ö", "o")
+        .replace("ç", "c")
+        .replace("\u0307", "")
     )
 
 

@@ -10,6 +10,12 @@ def test_stem_tavugum():
     assert text_utils.stem("tavugum") == "tavuk"
 
 
+def test_normalize_capital_i_dot():
+    assert text_utils.normalize("İşkembe") == "iskembe"
+    assert text_utils.normalize("İmam") == "imam"
+    assert "\u0307" not in text_utils.normalize("İşkembe çorbası")
+
+
 def test_has_term_avoids_false_positives():
     assert text_utils.has_term("serbet", "et") is False
     assert text_utils.has_term("koftesi", "kofte") is False
