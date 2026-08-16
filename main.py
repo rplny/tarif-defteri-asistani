@@ -7,12 +7,13 @@ from foundry_local_sdk import Configuration, FoundryLocalManager
 from ingestion import load_chunk_records
 from knowledge_store import KB_FOLDER, get_connection, index_documents, load_records
 from retrieval import format_context, keyword_rank_chunks, rank_chunks
+from text_utils import STOP, normalize
 
 SYSTEM_PROMPT = (
-    "Kullanıcının sorusunu SADECE verilen context'teki tarifleri kullanarak cevapla. "
-    "Cevabında kaynak dosya adını belirt (örnek: 'menemen.txt dosyasına göre ...'). "
-    "Context boşsa veya tarif yoksa uydurma; "
-    "açıkça 'Bu bilgi context'te yok.' de."
+    "Sadece aşağıdaki context'teki bilgiden cevap ver. Kısa yaz. "
+    "Context'te geçen tarif adlarını olduğu gibi kullan; yeni tarif veya hikaye ekleme. "
+    "Cevabında kaynak dosya adını söyle (örnek: diyet.txt dosyasına göre ...). "
+    "Context boşsa açıkça 'Bu bilgi context'te yok.' de."
 )
 
 
@@ -48,7 +49,77 @@ def retrieve_context(query, embedding_client, docs, doc_embeddings, sources=None
         top_k=top_k,
         min_score=min_score,
     )
-    return format_context(hits)
+    return format_context(select_hits(query, hits))
+
+
+GENERIC = STOP | {
+    "defterde", "yoktur", "icermez", "olabilir", "gibi", "tariflerde",
+    "malzemeler", "kaynak", "dosya", "dosyasina", "gore", "sebze",
+    "sebzeler", "iceren", "bunlar", "bunlardan", "ilgili", "adi",
+}
+
+
+def is_list_query(query):
+    q = normalize(query)
+    return any(key in q for key in ("oner", "vegan", "sebzesiz", "vejetaryen"))
+
+
+def select_hits(query, hits):
+    q = normalize(query)
+    if not hits:
+        return hits
+
+    def blob(hit):
+        return normalize(hit.get("content") or "")
+
+    if "sebzesiz" in q:
+        matched = [hit for hit in hits if "sebzesiz" in blob(hit)]
+    elif "vegan" in q:
+        matched = [
+            hit
+            for hit in hits
+            if "vegan" in blob(hit) and "vegan degildir" not in blob(hit)
+        ]
+    elif "vejetaryen" in q:
+        matched = [hit for hit in hits if "vejetaryen" in blob(hit)]
+    else:
+        return hits
+    if not matched:
+        return hits
+    matched.sort(key=lambda hit: 0 if hit.get("source") == "diyet.txt" else 1)
+    return matched
+
+
+def is_grounded(answer, hits):
+    if not (answer or "").strip() or not hits:
+        return False
+    ctx = set()
+    for hit in hits:
+        for word in normalize(hit.get("content") or "").split():
+            if len(word) >= 4 and word not in GENERIC:
+                ctx.add(word)
+    overlap = [
+        word
+        for word in normalize(answer).split()
+        if len(word) >= 4 and word not in GENERIC and word in ctx
+    ]
+    return any(len(word) >= 5 for word in overlap)
+
+
+def quote_hits(hits):
+    hit = hits[0]
+    source = hit.get("source") or "kaynak"
+    text = (hit.get("content") or "").strip()
+    return f"{source} dosyasına göre {text}"
+
+
+def finalize_answer(answer, hits, query=""):
+    if hits and is_list_query(query):
+        return quote_hits(hits)
+    text = (answer or "").strip()
+    if hits and not is_grounded(text, hits):
+        return quote_hits(hits)
+    return text
 
 
 def build_messages(query, context):
@@ -89,24 +160,27 @@ def resolve_answer(
     if not query:
         return "Boş soru gönderildi.", []
     docs = docs if docs is not None else []
-    hits = get_top_chunks(
+    hits = select_hits(
         query,
-        embedding_client,
-        docs,
-        doc_embeddings,
-        sources=sources,
-        top_k=top_k,
-        min_score=min_score,
+        get_top_chunks(
+            query,
+            embedding_client,
+            docs,
+            doc_embeddings,
+            sources=sources,
+            top_k=top_k,
+            min_score=min_score,
+        ),
     )
     context = format_context(hits)
     hit_sources = [hit["source"] for hit in hits if hit.get("source")]
     if context.strip():
-        if chat_client is None:
-            return context, hit_sources
+        if chat_client is None or is_list_query(query):
+            return (quote_hits(hits) if is_list_query(query) else context), hit_sources
         answer = stream_answer(
             chat_client, build_messages(query, context), writer=lambda *a, **k: None
-        ) or "Context yeterli bilgi içermiyor."
-        return answer, hit_sources
+        )
+        return finalize_answer(answer, hits, query), hit_sources
     if conn is not None:
         import search_engine
 
@@ -205,7 +279,10 @@ def run_question(query, embedding_client, chat_client, docs, embeddings, sources
         print("Boş soru gönderildi.")
         return "Boş soru gönderildi.", 0.0
     started = time.perf_counter()
-    hits = get_top_chunks(query, embedding_client, docs, embeddings, sources=sources, top_k=3)
+    hits = select_hits(
+        query,
+        get_top_chunks(query, embedding_client, docs, embeddings, sources=sources, top_k=3),
+    )
     _print_hits(hits)
     context = format_context(hits)
     if not context.strip():
@@ -225,7 +302,12 @@ def run_question(query, embedding_client, chat_client, docs, embeddings, sources
         elapsed = time.perf_counter() - started
         print(f"(yanıt süresi: {elapsed:.1f} sn)\n")
         return "Bu bilgi context'te yok.", elapsed
-    answer = stream_answer(chat_client, build_messages(query, context))
+    if is_list_query(query):
+        answer = quote_hits(hits)
+    else:
+        raw = stream_answer(chat_client, build_messages(query, context), writer=lambda *a, **k: None)
+        answer = finalize_answer(raw, hits, query)
+    print("Cevap:", answer)
     elapsed = time.perf_counter() - started
     print(f"(yanıt süresi: {elapsed:.1f} sn)\n")
     return answer, elapsed

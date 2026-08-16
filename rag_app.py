@@ -5,9 +5,12 @@ import streamlit as st
 
 from main import (
     build_messages,
+    finalize_answer,
     get_top_chunks,
+    is_list_query,
     load_models,
     prepare_index,
+    select_hits,
     stream_answer,
 )
 from retrieval import format_context
@@ -97,7 +100,10 @@ if st.button("Sor"):
             unsafe_allow_html=True,
         )
     else:
-        hits = get_top_chunks(q, embedding_client, docs, embeddings, sources=sources, top_k=3)
+        hits = select_hits(
+            q,
+            get_top_chunks(q, embedding_client, docs, embeddings, sources=sources, top_k=3),
+        )
         context = format_context(hits)
         st.markdown(f"<div class='soru'><b>Soru:</b> {html.escape(q)}</div>", unsafe_allow_html=True)
         badges = " ".join(
@@ -131,10 +137,12 @@ if st.button("Sor"):
                         unsafe_allow_html=True,
                     )
 
-            stream_answer(chat_client, build_messages(q, context), writer=writer)
-            if collected:
-                body = html.escape("".join(collected)).replace("\n", "<br>")
-                placeholder.markdown(
-                    f"<div class='cevap'><b>Cevap:</b><br>{body}</div>",
-                    unsafe_allow_html=True,
-                )
+            if is_list_query(q):
+                body = finalize_answer("", hits, q)
+            else:
+                stream_answer(chat_client, build_messages(q, context), writer=writer)
+                body = finalize_answer("".join(collected), hits, q)
+            placeholder.markdown(
+                f"<div class='cevap'><b>Cevap:</b><br>{html.escape(body).replace(chr(10), '<br>')}</div>",
+                unsafe_allow_html=True,
+            )

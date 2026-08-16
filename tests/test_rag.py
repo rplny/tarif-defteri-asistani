@@ -152,3 +152,106 @@ def test_get_top_chunks_returns_source():
     )
     assert hits
     assert hits[0]["source"] == "menemen.txt"
+
+
+def test_select_hits_keeps_sebzesiz_paragraph():
+    from main import select_hits
+
+    hits = [
+        {"source": "diyet.txt", "content": "Vegan tarifler: kısır ve imam bayıldı."},
+        {
+            "source": "diyet.txt",
+            "content": "Sebzesiz tarifler: peynirli omlet, tereyağlı pirinç pilavı ve cevizli baklava.",
+        },
+    ]
+    picked = select_hits("sebzesiz tarif öner", hits)
+    assert len(picked) == 1
+    assert "omlet" in picked[0]["content"]
+
+
+def test_select_hits_drops_vegan_degildir():
+    from main import select_hits
+
+    hits = [
+        {"source": "baklava.txt", "content": "Cevizli baklava. Vejetaryendir, vegan değildir."},
+        {"source": "diyet.txt", "content": "Vegan tarifler: kısır, imam bayıldı ve sebze güveç."},
+    ]
+    picked = select_hits("vegan tarif öner", hits)
+    assert picked
+    assert all(hit["source"] != "baklava.txt" for hit in picked)
+    assert picked[0]["source"] == "diyet.txt"
+
+
+def test_vegan_list_answer_not_baklava():
+    from main import answer_query, load_knowledge_items
+    from text_utils import normalize
+
+    client = LocalEmbeddingClient()
+    items = load_knowledge_items()
+    docs = [item["content"] for item in items]
+    sources = [item["source"] for item in items]
+    embs = [item.embedding for item in client.generate_embeddings(docs).data]
+    answer = normalize(answer_query("vegan tarif öner", client, embs, docs=docs, sources=sources))
+    assert "kisir" in answer
+    assert "baklava" not in answer
+
+
+def test_cacik_keyword_prefers_cacik_file():
+    from main import load_knowledge_items
+
+    client = LocalEmbeddingClient()
+    items = load_knowledge_items()
+    docs = [item["content"] for item in items]
+    sources = [item["source"] for item in items]
+    embs = [item.embedding for item in client.generate_embeddings(docs).data]
+    hits = get_top_chunks("Cacıkta hangi malzemeler var?", client, docs, embs, sources=sources)
+    assert hits
+    assert hits[0]["source"] == "cacik.txt"
+    assert all(hit["source"] == "cacik.txt" for hit in hits)
+
+
+def test_ungrounded_chat_falls_back_to_chunk():
+    from main import finalize_answer
+
+    hits = [
+        {
+            "source": "diyet.txt",
+            "content": "Sebzesiz tariflerde sebze yoktur. Bu defterde sebzesiz tarifler: peynirli omlet, tereyağlı pirinç pilavı ve cevizli baklava.",
+        }
+    ]
+    garbage = (
+        "Bilginizeceğim kaynak dosyanın adı 'diyet.txt' ile ilgili bir saade bulunuyoruz. "
+        "Seçtiğiniz sahnedeki sebzeleri doğru şekilde yazım."
+    )
+    answer = finalize_answer(garbage, hits)
+    assert "omlet" in answer.lower()
+    assert "baklava" in answer.lower()
+    assert answer.startswith("diyet.txt dosyasına göre")
+
+
+def test_grounded_chat_is_kept():
+    from main import finalize_answer
+
+    hits = [
+        {
+            "source": "diyet.txt",
+            "content": "Sebzesiz tarifler: peynirli omlet, tereyağlı pirinç pilavı ve cevizli baklava.",
+        }
+    ]
+    good = "diyet.txt dosyasına göre peynirli omlet, pilav ve baklava."
+    assert finalize_answer(good, hits) == good
+
+
+def test_list_query_uses_chunk_not_short_model_line():
+    from main import finalize_answer
+
+    hits = [
+        {
+            "source": "diyet.txt",
+            "content": "Sebzesiz tariflerde sebze yoktur. Bu defterde sebzesiz tarifler: peynirli omlet, tereyağlı pirinç pilavı ve cevizli baklava.",
+        }
+    ]
+    answer = finalize_answer("Bu defterde sebize yoktur.", hits, "sebzesiz tarif öner")
+    assert "omlet" in answer.lower()
+    assert "baklava" in answer.lower()
+    assert "sebize" not in answer.lower()

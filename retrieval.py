@@ -1,5 +1,6 @@
 """Kosinüs benzerliği: soru vektörü ile SQLite'taki parça vektörlerini karşılaştırır."""
 import math
+from pathlib import Path
 
 from text_utils import STOP, normalize, stem
 
@@ -54,12 +55,17 @@ def rank_chunks(query_embedding, docs, doc_embeddings, sources=None, top_k=3, mi
     return hits
 
 
+QUERY_STOP = STOP | {
+    "hangi", "malzeme", "malzemeler", "nedir", "icerir", "icinde", "olan",
+}
+
+
 def keyword_rank_chunks(query, docs, sources=None, top_k=3):
     """Kosinüs yetmezse parça metninde kelime örtüşmesiyle arar."""
     sources = sources or [""] * len(docs)
     tokens = []
     for word in normalize(query).split():
-        if len(word) < 4 or word in STOP:
+        if len(word) < 4 or word in QUERY_STOP:
             continue
         tokens.append(word)
         stemmed = stem(word)
@@ -71,8 +77,20 @@ def keyword_rank_chunks(query, docs, sources=None, top_k=3):
     for index, doc in enumerate(docs):
         blob = normalize(doc)
         source_name = normalize(sources[index] if index < len(sources) else "")
-        hits = sum(1 for token in tokens if token in blob)
-        if any(token in source_name for token in tokens):
+        source_stem = normalize(Path(sources[index] or "").stem)
+        hits = 0
+        for token in tokens:
+            if token == "vegan" and "vegan degildir" in blob:
+                continue
+            if token in blob:
+                hits += 1
+        if source_stem and len(source_stem) >= 4:
+            if any(
+                token == source_stem or token.startswith(source_stem) or source_stem.startswith(token)
+                for token in tokens
+            ):
+                hits += 2
+        elif any(token in source_name for token in tokens):
             hits += 2
         if hits:
             scored.append((hits, index))
