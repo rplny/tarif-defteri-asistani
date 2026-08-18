@@ -58,3 +58,20 @@ def test_folder_loader(tmp_path):
     records = load_chunk_records(tmp_path)
     assert records[0]["source"] == "a.txt"
     assert [item["content"] for item in records] == ["Paragraf bir.", "Paragraf iki."]
+
+
+def test_prepare_index_reindexes_when_embedding_dim_changes(tmp_path):
+    from knowledge_store import save_chunk
+    from main import load_knowledge_items, prepare_index
+
+    conn = get_connection(tmp_path / "kb.db")
+    items = load_knowledge_items()
+    assert items
+    for item in items:
+        save_chunk(conn, item["content"], [0.1, 0.2], source=item["source"])
+    assert len(load_records(conn)[0]["embedding"]) == 2
+    client = LocalEmbeddingClient()
+    _docs, embs, _sources = prepare_index(client, conn=conn)
+    assert embs
+    assert len(embs[0]) == 256
+    conn.close()

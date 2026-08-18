@@ -1,5 +1,6 @@
 """Kosinüs benzerliği: soru vektörü ile SQLite'taki parça vektörlerini karşılaştırır."""
 import math
+import re
 from pathlib import Path
 
 from text_utils import STOP, has_term, normalize, stem
@@ -101,11 +102,11 @@ def keyword_rank_chunks(query, docs, sources=None, top_k=3):
                 token == source_stem
                 or token.startswith(source_stem)
                 or source_stem.startswith(token)
-                or token in source_name
+                or has_term(source_name, token)
                 for token in tokens
             ):
                 hits += 2
-        elif any(token_in_text(source_name, token) or token in source_name for token in tokens):
+        elif any(token_in_text(source_name, token) or has_term(source_name, token) for token in tokens):
             hits += 2
         if hits:
             scored.append((hits, index))
@@ -125,9 +126,13 @@ def keyword_rank_chunks(query, docs, sources=None, top_k=3):
 
 def part_in_query(query, part):
     q = normalize(query)
+    if not part:
+        return False
     if has_term(q, part):
         return True
-    return any(tok == part or stem(tok) == part for tok in q.split())
+    if any(tok == part or stem(tok) == part for tok in q.split()):
+        return True
+    return bool(re.search(rf"(?<![a-z]){re.escape(part)}", q))
 
 
 def tighten_hits(query, hits):

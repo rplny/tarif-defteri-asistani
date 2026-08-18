@@ -28,6 +28,7 @@ app.add_middleware(
 )
 
 _conn = None
+_rag = None
 
 
 def get_conn():
@@ -36,6 +37,21 @@ def get_conn():
         _conn = database.get_connection()
         database.seed_if_empty(_conn)
     return _conn
+
+
+def _rag_index():
+    global _rag
+    if _rag is None:
+        from embeddings import get_embedding_client
+        from main import load_knowledge_items
+
+        client = get_embedding_client()
+        items = load_knowledge_items()
+        docs = [item["content"] for item in items]
+        sources = [item["source"] for item in items]
+        embs = [item.embedding for item in client.generate_embeddings(docs).data]
+        _rag = (client, docs, embs, sources)
+    return _rag
 
 
 class RecipeOut(BaseModel):
@@ -91,10 +107,24 @@ def search(q: str = Query("", max_length=MAX_QUESTION)):
     question = q.strip()[:MAX_QUESTION]
     if not question:
         return {"question": question, "answer": search_engine.build_answer(question, []), "recipes": []}
-    found = search_engine.search_recipes(get_conn(), question, limit=8)
+    from main import resolve_answer
+
+    client, docs, embs, sources = _rag_index()
+    answer, hit_sources = resolve_answer(
+        question,
+        client,
+        embs,
+        docs=docs,
+        sources=sources,
+        conn=get_conn(),
+    )
+    by_file = {recipe["source_file"]: recipe for recipe in database.get_all_recipes(get_conn())}
+    found = [by_file[name] for name in hit_sources if name in by_file]
+    if not found:
+        found = search_engine.search_recipes(get_conn(), question, limit=8)
     return {
         "question": question,
-        "answer": search_engine.build_answer(question, found),
+        "answer": answer,
         "recipes": [to_recipe(recipe, include_text=True) for recipe in found],
     }
 

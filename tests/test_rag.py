@@ -304,6 +304,8 @@ def test_category_lists_use_diyet_catalog():
     vegetarian = normalize(answer_query("vejetaryen tarif öner", client, embs, docs=docs, sources=sources))
     assert "menemen" in vegetarian
     assert "cacik" in vegetarian
+    assert "kisir" in vegetarian
+    assert "imam" in vegetarian
     assert "malzemeler" not in vegetarian
     assert vegetarian.startswith("diyet.txt")
 
@@ -394,3 +396,238 @@ def test_select_hits_vejetaryen_prefers_catalog():
     assert picked
     assert picked[0]["source"] == "diyet.txt"
     assert "menemen" in picked[0]["content"]
+
+
+class _GarbageChat:
+    def complete_streaming_chat(self, messages):
+        class Delta:
+            content = (
+                "Bilginizeceğim kaynak dosyanın adı yumurta ile ilgili bir saade. "
+                "Menemen salatalık ve çikolata ekle hikaye."
+            )
+
+        class Choice:
+            delta = Delta()
+
+        class Chunk:
+            choices = [Choice()]
+
+        yield Chunk()
+
+
+def _kb_index():
+    from embeddings import LocalEmbeddingClient
+    from main import load_knowledge_items
+
+    client = LocalEmbeddingClient()
+    items = load_knowledge_items()
+    docs = [item["content"] for item in items]
+    sources = [item["source"] for item in items]
+    embs = [item.embedding for item in client.generate_embeddings(docs).data]
+    return client, docs, sources, embs
+
+
+def test_list_query_does_not_swallow_named_recipe():
+    from main import catalog_marker, is_list_query
+
+    assert is_list_query("vegan tarif öner")
+    assert catalog_marker("vegan tarif öner") == "vegan tarifler:"
+    assert not is_list_query("Menemen vegan mı?")
+    assert catalog_marker("Menemen vegan mı?") is None
+    assert not is_list_query("Sütlaç tatlısı nasıl yapılır?")
+    assert catalog_marker("Sütlaç tatlısı nasıl yapılır?") is None
+    assert is_list_query("tatlı öner")
+
+
+def test_menemen_vegan_mi_uses_recipe_not_catalog():
+    from main import answer_query
+    from text_utils import normalize
+
+    client, docs, sources, embs = _kb_index()
+    answer = normalize(answer_query("Menemen vegan mı?", client, embs, docs=docs, sources=sources))
+    assert "vegan degil" in answer
+    assert "kisir" not in answer
+    assert "menemen.txt" in answer
+
+
+def test_baklava_vegan_mi_not_vegan_list():
+    from main import answer_query
+    from text_utils import normalize
+
+    client, docs, sources, embs = _kb_index()
+    answer = normalize(answer_query("Baklava vegan mı?", client, embs, docs=docs, sources=sources))
+    assert "vegan degil" in answer
+    assert "imam" not in answer
+
+
+def test_kisir_vegan_mi_yes():
+    from main import answer_query
+    from text_utils import normalize
+
+    client, docs, sources, embs = _kb_index()
+    answer = normalize(answer_query("Kısır vegan mı?", client, embs, docs=docs, sources=sources))
+    assert "vegan degil" not in answer
+    assert "vegan" in answer
+    assert "kisir.txt" in answer
+
+
+def test_sutlac_tatlisi_howto_uses_recipe():
+    from main import answer_query, get_top_chunks
+    from text_utils import normalize
+
+    client, docs, sources, embs = _kb_index()
+    hits = get_top_chunks("Sütlaç tatlısı nasıl yapılır?", client, docs, embs, sources=sources)
+    assert hits
+    assert all(hit["source"] == "sutlac.txt" for hit in hits)
+    answer = normalize(
+        answer_query("Sütlaç tatlısı nasıl yapılır?", client, embs, docs=docs, sources=sources)
+    )
+    assert "sutlac.txt" in answer
+    assert "pirinc" in answer
+    assert "cevizli baklava, firin sutlac ve cikolatali brownie" not in answer
+
+
+def test_howto_ignores_garbage_chat():
+    from main import answer_query
+    from text_utils import normalize
+
+    client, docs, sources, embs = _kb_index()
+    answer = normalize(
+        answer_query(
+            "Menemen nasıl yapılır?",
+            client,
+            embs,
+            docs=docs,
+            sources=sources,
+            chat_client=_GarbageChat(),
+        )
+    )
+    assert "yumurta" in answer
+    assert "domates" in answer
+    assert "saade" not in answer
+    assert "cikolata" not in answer
+    assert "salatalik" not in answer
+    assert "hikaye" not in answer
+
+
+def test_garbage_chat_not_kept_by_finalize():
+    from main import finalize_answer, is_grounded
+
+    hits = [
+        {
+            "source": "menemen.txt",
+            "content": "Menemen kahvaltılık bir yumurta yemeğidir. Malzemeler: yumurta, domates, biber, soğan.",
+        }
+    ]
+    garbage = (
+        "Bilginizeceğim kaynak dosyanın adı yumurta ile ilgili bir saade. "
+        "Menemen salatalık ekle hikaye."
+    )
+    mixed = "Menemen yumurta, domates ve biber ile yapılır ama üzerine çikolata ve işkembe ekle."
+    assert is_grounded(garbage, hits) is False
+    assert is_grounded(mixed, hits) is False
+    answer = finalize_answer(garbage, hits, "Menemen nasıl yapılır?")
+    assert "yumurta" in answer.lower()
+    assert "saade" not in answer.lower()
+    assert "işkembe" not in answer.lower()
+    assert "çikolata" not in answer.lower()
+
+
+def test_generic_tarif_oner_lists_notebook():
+    from main import answer_query
+    from text_utils import normalize
+
+    client, docs, sources, embs = _kb_index()
+    answer = normalize(answer_query("tarif öner", client, embs, docs=docs, sources=sources))
+    assert "context'te yok" not in answer
+    assert "menemen" in answer
+    assert "cacik" in answer
+
+
+def test_named_oner_returns_that_recipe_not_catalog():
+    from main import answer_query, is_list_query
+    from text_utils import normalize
+
+    assert not is_list_query("köfte öner")
+    assert not is_list_query("menemen öner")
+    client, docs, sources, embs = _kb_index()
+    kofte = normalize(answer_query("köfte öner", client, embs, docs=docs, sources=sources))
+    assert "kofte.txt" in kofte
+    assert "kiyma" in kofte
+    assert "baklava, brownie, cacik" not in kofte
+    menemen = normalize(answer_query("menemen öner", client, embs, docs=docs, sources=sources))
+    assert "menemen.txt" in menemen
+    assert "yumurta" in menemen
+
+
+def test_tavuk_oner_is_chicken_recipe():
+    from main import answer_query
+    from text_utils import normalize
+
+    client, docs, sources, embs = _kb_index()
+    answer = normalize(answer_query("tavuk öner", client, embs, docs=docs, sources=sources))
+    assert "tavuk_sote.txt" in answer
+    assert "baklava, brownie" not in answer
+
+
+def test_inventory_counts_chicken_recipes(conn):
+    from main import answer_query
+    from text_utils import normalize
+
+    client, docs, sources, embs = _kb_index()
+    answer = normalize(
+        answer_query(
+            "tavuğum var kaç tane tarif yapabilirim",
+            client,
+            embs,
+            docs=docs,
+            sources=sources,
+            conn=conn,
+        )
+    )
+    assert "uygun" in answer
+    assert "tarif var" in answer
+    assert "tavuk" in answer
+    assert "saade" not in answer
+
+
+def test_yumurtam_var_lists_egg_recipes_not_only_brownie(conn):
+    from main import answer_query
+    from text_utils import normalize
+
+    client, docs, sources, embs = _kb_index()
+    answer = normalize(
+        answer_query(
+            "yumurtam var ne yapabilirim",
+            client,
+            embs,
+            docs=docs,
+            sources=sources,
+            conn=conn,
+        )
+    )
+    assert "menemen" in answer
+    assert "omlet" in answer
+    assert answer.index("menemen") < len(answer)
+
+
+def test_mercimek_howto_lists_both_recipes():
+    from main import answer_query
+    from text_utils import normalize
+
+    client, docs, sources, embs = _kb_index()
+    answer = normalize(answer_query("mercimek nasıl yapılır", client, embs, docs=docs, sources=sources))
+    assert "mercimek_corbasi.txt" in answer
+    assert "mercimek_koftesi.txt" in answer
+    assert "birden fazla" in answer
+
+
+def test_baklava_tatli_mi_is_yes():
+    from main import answer_query
+    from text_utils import normalize
+
+    client, docs, sources, embs = _kb_index()
+    answer = normalize(answer_query("Baklava tatlı mı?", client, embs, docs=docs, sources=sources))
+    assert "tatli" in answer
+    assert "tatli degil" not in answer
+    assert "yufkalari" not in answer

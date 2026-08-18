@@ -23,6 +23,11 @@ def test_health_and_search(tmp_path, monkeypatch):
     body = search.json()
     assert body["recipes"]
     assert "Menemen" in body["recipes"][0]["title"]
+    assert "yumurta" in body["answer"].lower() or "Menemen" in body["answer"]
+
+    vegan = client.get("/api/search", params={"q": "Menemen vegan mı?"})
+    assert vegan.status_code == 200
+    assert "vegan değil" in vegan.json()["answer"].lower() or "vegan degil" in vegan.json()["answer"].lower()
 
     empty = client.get("/api/search", params={"q": ""})
     assert empty.status_code == 200
