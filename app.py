@@ -199,11 +199,14 @@ with tab_q:
         q_html = html.escape(entry["q"])
         st.markdown(f"<div class='soru'><b>Soru:</b> {q_html}</div>", unsafe_allow_html=True)
         body = html.escape(entry["a"]).replace("\n", "<br>")
+        answer_l = entry["a"].lower()
         src = " ".join(
             f"<span class='miss'>dosya: {html.escape(str(source))}</span>"
             for source in dict.fromkeys(entry["sources"])
+            if str(source).lower() not in answer_l
         )
-        st.markdown(f"<div class='cevap'><b>Cevap:</b><br>{body}<br>{src}</div>", unsafe_allow_html=True)
+        extra = f"<br>{src}" if src else ""
+        st.markdown(f"<div class='cevap'><b>Cevap:</b><br>{body}{extra}</div>", unsafe_allow_html=True)
 
 with tab_m:
     bag = st.text_input("Elindeki malzemeleri virgülle ayırarak yaz", placeholder="yumurta, un, süt")

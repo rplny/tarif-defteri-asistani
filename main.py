@@ -353,6 +353,12 @@ def ingredients_from_hits(hits):
     return [part.strip() for part in re.split(r",| ve ", match.group(1)) if part.strip()]
 
 
+def readable_recipe_text(text):
+    """Malzeme ve yapılış satırlarını ayır; tek blok halinde okunmasın."""
+    text = re.sub(r"\s+(Malzemeler:)", r"\n\n\1", (text or "").strip(), flags=re.IGNORECASE)
+    return re.sub(r"\s+(Yapılışı:|Yapilisi:)", r"\n\n\1", text, flags=re.IGNORECASE)
+
+
 def format_recipe_answer(hits, query=""):
     if not hits:
         return "Bu bilgi context'te yok."
@@ -374,7 +380,10 @@ def format_recipe_answer(hits, query=""):
                 if content and content not in texts:
                     texts.append(content)
                 break
-    parts = [f"{source} dosyasına göre {' '.join(texts)}" for source, texts in grouped]
+    parts = [
+        f"{source} dosyasına göre {readable_recipe_text(' '.join(texts))}"
+        for source, texts in grouped
+    ]
     if len(parts) > 1:
         return "Bu adda birden fazla tarif var.\n\n" + "\n\n".join(parts)
     return parts[0]

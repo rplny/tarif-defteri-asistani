@@ -648,9 +648,13 @@ def test_menemen_sources_not_duplicated():
         sources=sources,
     )
     assert hit_sources == ["menemen.txt"]
-    assert answer_query("menemen tarifi", client, embs, docs=docs, sources=sources).startswith(
-        "menemen.txt"
-    )
+    answer = answer_query("menemen tarifi", client, embs, docs=docs, sources=sources)
+    assert answer.startswith("menemen.txt")
+    assert "Malzemeler:" in answer
+    assert "Yapılışı:" in answer
+    assert answer.index("Malzemeler:") < answer.index("Yapılışı:")
+    assert "\n\nMalzemeler:" in answer
+    assert "\n\nYapılışı:" in answer
 
 
 def test_unknown_oner_does_not_dump_catalog():
