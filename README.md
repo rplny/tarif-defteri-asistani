@@ -21,7 +21,7 @@ Tek makinede dört katman:
 
 Akış: tarif sorusu → embedding → SQLite → `[Kaynak: menemen.txt]` → yerel chat.
 
-Plan kazanımları (Foundry RAG iskeleti) tarif konusuna uygulandı: Hello Model, ingestion, kosinüs, SQLite, sistem prompt, kaynak atfı, “bilmiyorum”, CLI demo.
+Kurulum kontrolü `hello_model.py`. Asıl kullanım `main.py` ve `streamlit run app.py`.
 
 ```bash
 python hello_model.py
@@ -106,9 +106,3 @@ pytest -q
 
 - İlk model indirmesi için internet gerekir; cevap yerelde üretilir.
 - Küçük model kısa sapma yapabilir; eşik ve prompt bunu sınırlar.
-
-## Neler öğrendik
-
-- RAG: bul, ekle, üret. Tarif defterine uygulanınca uydurma azalır.
-- Kaynak dosya adı hem aramayı hem atfı tutar.
-- Zayıf eşleşmeyi modele vermemek, yalnızca prompt yazmaktan daha güvenilir.
