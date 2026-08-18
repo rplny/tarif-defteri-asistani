@@ -6,7 +6,7 @@ Canlı koşu: `python main.py --demo`
 |---|-----|------|----------|--------|
 | 1 | Cevaplanabilir | Menemen nasıl yapılır? | soğan, biber, domates, yumurta | menemen.txt |
 | 2 | Cevaplanabilir | Cacıkta hangi malzemeler var? | yoğurt, salatalık, sarımsak | cacik.txt |
-| 3 | Cevaplanabilir | vegan tarif öner | kısır, imam bayıldı, sebze güveç | diyet.txt / kisir.txt |
+| 3 | Cevaplanabilir | vegan tarif öner | kısır, imam bayıldı, sebze güveç, gözleme | diyet.txt / kisir.txt |
 | 4 | Cevaplanabilir | sebzesiz tarif öner | omlet, pilav, baklava, sütlaç, brownie | diyet.txt |
 | 5 | Cevaplanabilir | Baklava nasıl şerbetlenir? | kaynar şerbet, soğumuş baklava | baklava.txt |
 | 6 | Cevaplanabilir | vejetaryen tarif öner | menemen, cacık, omlet | diyet.txt |

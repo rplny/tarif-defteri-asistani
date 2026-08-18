@@ -37,6 +37,11 @@ def test_index_from_txt_folder():
     assert "tavuk_sote.txt" in sources
     assert "iskembe_corbasi.txt" in sources
     assert "mercimek_koftesi.txt" in sources
+    assert "gozleme.txt" in sources
+    assert "karniyarik.txt" in sources
+    assert "lahmacun.txt" in sources
+    assert "manti.txt" in sources
+    assert "makarna_salcasi.txt" in sources
     assert any("vegan" in text.lower() for text in texts)
     assert any("sebzesiz" in text.lower() for text in texts)
     assert any("tatlılar" in text for text in texts)

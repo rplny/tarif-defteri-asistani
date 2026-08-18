@@ -115,6 +115,18 @@ def catalog_label(query):
     return None
 
 
+def extra_query_tokens(query):
+    """Kategori/öneri kalıpları dışında kalan kelimeler: 'gözleme öner' → gözleme."""
+    skip = set(STOP)
+    skip.update(("tarif", "tarifler", "oner", "listele", "neler", "hangi"))
+    skip.update(key for key, _marker in CATALOGS)
+    return [
+        word
+        for word in normalize(query).split()
+        if len(word) >= 4 and word not in skip
+    ]
+
+
 def is_list_query(query):
     """Kategori önerisi: 'vegan tarif öner'. 'köfte öner' veya 'Menemen vegan mı?' değil."""
     if is_yesno_query(query) or is_inventory_query(query):
@@ -131,7 +143,7 @@ def is_list_query(query):
         return True
     if has_hint and has_cat:
         return True
-    if has_hint and not named and not has_specific_food(query):
+    if has_hint and not named and not has_specific_food(query) and not extra_query_tokens(query):
         return True
     return False
 

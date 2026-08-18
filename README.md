@@ -67,7 +67,7 @@ Yeni tarif için `knowledge/` altına `.txt` koy, `python main.py` veya `ingesti
 1. Cevaplanabilir: `Menemen nasıl yapılır?`  
    Beklenen: soğan, biber, domates, yumurta + `menemen.txt`
 2. Vegan: `vegan tarif öner`  
-   Beklenen: kısır, imam bayıldı, sebze güveç + `diyet.txt`
+   Beklenen: kısır, imam bayıldı, sebze güveç, gözleme + `diyet.txt`
 3. Sebzesiz: `sebzesiz tarif öner`  
    Beklenen: omlet, pilav, baklava, sütlaç, brownie + `diyet.txt`
 4. Cevaplanamaz: `Bu uygulamanın aylık barındırma maliyeti nedir?`  

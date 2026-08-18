@@ -312,6 +312,7 @@ def test_category_lists_use_diyet_catalog():
     breakfast = normalize(answer_query("kahvaltı öner", client, embs, docs=docs, sources=sources))
     assert "menemen" in breakfast
     assert "omlet" in breakfast
+    assert "gozleme" in breakfast
     assert breakfast.startswith("diyet.txt")
 
     mezze = normalize(answer_query("meze öner", client, embs, docs=docs, sources=sources))
@@ -329,6 +330,7 @@ def test_category_lists_use_diyet_catalog():
     meat = normalize(answer_query("etli tarif öner", client, embs, docs=docs, sources=sources))
     assert "kofte" in meat
     assert "tavuk" in meat
+    assert "lahmacun" in meat
     assert "baklava" not in meat
     assert meat.startswith("diyet.txt")
 
@@ -437,6 +439,9 @@ def test_list_query_does_not_swallow_named_recipe():
     assert not is_list_query("Sütlaç tatlısı nasıl yapılır?")
     assert catalog_marker("Sütlaç tatlısı nasıl yapılır?") is None
     assert is_list_query("tatlı öner")
+    assert is_list_query("tarif öner")
+    assert not is_list_query("pizza öner")
+    assert not is_list_query("gözleme öner")
 
 
 def test_menemen_vegan_mi_uses_recipe_not_catalog():
@@ -558,6 +563,10 @@ def test_named_oner_returns_that_recipe_not_catalog():
     menemen = normalize(answer_query("menemen öner", client, embs, docs=docs, sources=sources))
     assert "menemen.txt" in menemen
     assert "yumurta" in menemen
+    gozleme = normalize(answer_query("gözleme öner", client, embs, docs=docs, sources=sources))
+    assert "gozleme.txt" in gozleme
+    assert "patates" in gozleme
+    assert "baklava, brownie, cacik" not in gozleme
 
 
 def test_tavuk_oner_is_chicken_recipe():
@@ -642,6 +651,34 @@ def test_menemen_sources_not_duplicated():
     assert answer_query("menemen tarifi", client, embs, docs=docs, sources=sources).startswith(
         "menemen.txt"
     )
+
+
+def test_unknown_oner_does_not_dump_catalog():
+    from main import answer_query
+    from text_utils import normalize
+
+    client, docs, sources, embs = _kb_index()
+    answer = normalize(answer_query("pizza öner", client, embs, docs=docs, sources=sources))
+    assert "baklava, brownie, cacik" not in answer
+    assert "context'te yok" in answer or "bulunamadi" in answer
+
+
+def test_extra_db_recipes_use_knowledge_files():
+    from main import answer_query
+    from text_utils import normalize
+
+    client, docs, sources, embs = _kb_index()
+    lahmacun = normalize(answer_query("lahmacun tarifi", client, embs, docs=docs, sources=sources))
+    assert "lahmacun.txt" in lahmacun
+    assert "kiyma" in lahmacun
+    karniyarik = normalize(answer_query("karnıyarık nasıl yapılır", client, embs, docs=docs, sources=sources))
+    assert "karniyarik.txt" in karniyarik
+    assert "patlican" in karniyarik
+    vegan = normalize(answer_query("vegan tarif öner", client, embs, docs=docs, sources=sources))
+    assert "gozleme" in vegan
+    meat = normalize(answer_query("etli tarif öner", client, embs, docs=docs, sources=sources))
+    assert "lahmacun" in meat
+    assert "manti" in meat
 
 
 def test_baklava_tatli_mi_is_yes():
