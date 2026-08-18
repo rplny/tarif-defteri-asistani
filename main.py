@@ -455,6 +455,17 @@ def stream_answer(chat_client, messages, writer=print):
     return "".join(parts).strip()
 
 
+def unique_sources(sources):
+    seen = set()
+    out = []
+    for source in sources or []:
+        if not source or source in seen:
+            continue
+        seen.add(source)
+        out.append(source)
+    return out
+
+
 def inventory_answer(query, conn=None):
     import database
     import search_engine
@@ -464,9 +475,9 @@ def inventory_answer(query, conn=None):
         database.seed_if_empty(conn)
     found = search_engine.search_recipes(conn, query, limit=8)
     if found:
-        return search_engine.build_answer(query, found), [
+        return search_engine.build_answer(query, found), unique_sources(
             recipe["source_file"] for recipe in found
-        ]
+        )
     if not has_specific_food(query):
         return "Elindeki malzemeleri yaz: örneğin yumurta, un, süt.", []
     return "Bu bilgi context'te yok.", []
@@ -502,7 +513,7 @@ def resolve_answer(
         ),
     )
     context = format_context(hits)
-    hit_sources = [hit["source"] for hit in hits if hit.get("source")]
+    hit_sources = unique_sources(hit["source"] for hit in hits if hit.get("source"))
     if context.strip():
         if chat_client is None or is_extractive_query(query):
             return extract_answer(query, hits), hit_sources
@@ -515,9 +526,9 @@ def resolve_answer(
 
         found = search_engine.search_recipes(conn, query, limit=8)
         if found:
-            return search_engine.build_answer(query, found), [
+            return search_engine.build_answer(query, found), unique_sources(
                 recipe["source_file"] for recipe in found
-            ]
+            )
     return "Bu bilgi context'te yok.", []
 
 

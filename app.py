@@ -81,32 +81,43 @@ st.markdown(CSS, unsafe_allow_html=True)
 
 @st.cache_resource
 def boot_rag():
-    from main import load_models, prepare_index
+    from embeddings import foundry_enabled, get_embedding_client
+    from main import prepare_index
 
-    _emb_model, embedding_client, _chat_model, chat_client = load_models()
+    if foundry_enabled():
+        from main import load_models
+
+        _emb_model, embedding_client, _chat_model, chat_client = load_models()
+        docs, embeddings, sources = prepare_index(embedding_client)
+        return embedding_client, chat_client, docs, embeddings, sources
+
+    embedding_client = get_embedding_client()
     docs, embeddings, sources = prepare_index(embedding_client)
-    return embedding_client, chat_client, docs, embeddings, sources
+    return embedding_client, None, docs, embeddings, sources
 
-
-rag = None
-rag_error = ""
-try:
-    rag = boot_rag()
-except Exception as exc:
-    rag = None
-    rag_error = str(exc)[:200]
 
 if "conn" not in st.session_state:
     st.session_state.conn = database.get_connection()
     database.seed_if_empty(st.session_state.conn)
 if "chat" not in st.session_state:
     st.session_state.chat = []
+if "rag" not in st.session_state:
+    st.session_state.rag = None
+    st.session_state.rag_error = ""
 
 conn = st.session_state.conn
 
 with st.sidebar:
     st.markdown("### Tarif Defteri Asistanı")
     st.caption("Soru sekmesi Foundry Local RAG ile tariflerde arar.")
+    if st.session_state.rag is None and not st.session_state.rag_error:
+        with st.spinner("Modeller yükleniyor..."):
+            try:
+                st.session_state.rag = boot_rag()
+            except Exception as exc:
+                st.session_state.rag_error = str(exc)[:200]
+    rag = st.session_state.rag
+    rag_error = st.session_state.rag_error
     if rag:
         st.caption("RAG hazır.")
     else:
@@ -133,6 +144,8 @@ with st.sidebar:
                     errors.append(f"{uploaded.name}: {exc}")
             if ok:
                 boot_rag.clear()
+                st.session_state.rag = None
+                st.session_state.rag_error = ""
                 st.success(f"{ok} tarif kaydedildi. RAG indeksi yenilenecek.")
             for message in errors:
                 st.error(message)
@@ -188,7 +201,7 @@ with tab_q:
         body = html.escape(entry["a"]).replace("\n", "<br>")
         src = " ".join(
             f"<span class='miss'>dosya: {html.escape(str(source))}</span>"
-            for source in entry["sources"]
+            for source in dict.fromkeys(entry["sources"])
         )
         st.markdown(f"<div class='cevap'><b>Cevap:</b><br>{body}<br>{src}</div>", unsafe_allow_html=True)
 

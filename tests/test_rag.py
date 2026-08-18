@@ -622,6 +622,28 @@ def test_mercimek_howto_lists_both_recipes():
     assert "birden fazla" in answer
 
 
+def test_menemen_sources_not_duplicated():
+    from main import answer_query, load_knowledge_items, resolve_answer
+    from embeddings import LocalEmbeddingClient
+
+    client = LocalEmbeddingClient()
+    items = load_knowledge_items()
+    docs = [item["content"] for item in items]
+    sources = [item["source"] for item in items]
+    embs = [item.embedding for item in client.generate_embeddings(docs).data]
+    _answer, hit_sources = resolve_answer(
+        "menemen tarifi",
+        client,
+        embs,
+        docs=docs,
+        sources=sources,
+    )
+    assert hit_sources == ["menemen.txt"]
+    assert answer_query("menemen tarifi", client, embs, docs=docs, sources=sources).startswith(
+        "menemen.txt"
+    )
+
+
 def test_baklava_tatli_mi_is_yes():
     from main import answer_query
     from text_utils import normalize
