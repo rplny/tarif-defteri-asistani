@@ -2,8 +2,6 @@
 
 Yemek tarifleri üzerine yerel belge asistanı. Soru sorulunca önce defterdeki tariflerde ilgili parça bulunur, sonra cevap yalnızca o context ile cihazda üretilir. Microsoft Foundry Local RAG: embedding, kosinüs arama, SQLite, yerel sohbet.
 
-![RAG CLI](docs/rag-cli.gif)
-
 ## Problem
 
 Genel bir dil modeli, senin defterinde olmayan bir tarifi uydurabilir. Bu asistan RAG kullanır: önce ara, sonra üret. Tarif belgede yoksa “Bu bilgi context'te yok.” der. Varsa kaynak dosyayı belirtir (`menemen.txt` gibi).
@@ -27,15 +25,6 @@ Kurulum kontrolü `hello_model.py`. Asıl kullanım `main.py` ve `streamlit run 
 python hello_model.py
 python main.py --demo
 streamlit run app.py
-```
-
-```mermaid
-flowchart LR
-  U[Tarif sorusu] --> A[Tarif Defteri RAG]
-  A -->|vektör arama| S[(SQLite tarif parçaları)]
-  S -->|bulunan parçalar| A
-  A -->|soru + context| L[Foundry Local]
-  L -->|cevap| U
 ```
 
 ## Kurulum
@@ -76,6 +65,22 @@ Yeni tarif için `knowledge/` altına `.txt` koy, `python main.py` veya `ingesti
    Beklenen: `Boş soru gönderildi.`
 
 Ayrıntı: [docs/evaluation.md](docs/evaluation.md)
+
+<img src="docs/rag-cli.gif" width="640" height="390" alt="RAG CLI demo">
+
+<details>
+<summary>Akış</summary>
+
+```mermaid
+flowchart LR
+  U[Tarif sorusu] --> A[Tarif Defteri RAG]
+  A -->|vektör arama| S[(SQLite tarif parçaları)]
+  S -->|bulunan parçalar| A
+  A -->|soru + context| L[Foundry Local]
+  L -->|cevap| U
+```
+
+</details>
 
 ## Tasarım kararları
 
